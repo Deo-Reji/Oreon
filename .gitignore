@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native builds
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+android/
+ios/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Build outputs
+build/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# ML model files
+*.pt
+*.pth
+*.onnx
+*.h5
+*.pkl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
