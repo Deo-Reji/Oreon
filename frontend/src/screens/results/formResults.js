@@ -1,0 +1,137 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  Alert,
+  StatusBar,
+} from 'react-native';
+import { BottomNav } from '../../components/navigation';
+import { MagentaButton, CyanButton } from '../../components/buttons';
+import { DonutChart, SimpleBarChart } from '../../components/charts';
+
+const MAGENTA = '#CC00FF';
+
+const glowText = {
+  textShadowColor: '#FFFFFF',
+  textShadowOffset: { width: 0, height: 0 },
+  textShadowRadius: 18,
+};
+
+const IMPROVEMENTS = [
+  'Too Narrow Grip',
+  'Elbows Flared',
+  'Not Enough Depth',
+];
+
+export default function FormResults({ navigation }) {
+  const score = 87;
+  const improvements = IMPROVEMENTS;
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <View style={{ flex: 1 }}>
+
+        {/* Logo */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+          <Image source={require('../../../assets/logo.png')} style={{ width: 50, height: 50 }} resizeMode="contain" />
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+          {/* Title */}
+          <Text
+            style={[
+              glowText,
+              {
+                color: '#FFF',
+                fontWeight: '900',
+                fontSize: 40,
+                textTransform: 'uppercase',
+                letterSpacing: 2,
+                textAlign: 'center',
+                lineHeight: 46,
+                marginBottom: 24,
+              },
+            ]}
+          >
+            Your Form{'\n'}Results
+          </Text>
+
+          {/* Charts row */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 32,
+            }}
+          >
+            <DonutChart percentage={score} size={140} />
+            <SimpleBarChart
+              data={[
+                { s1: 3, s2: 5 },
+                { s1: 10, s2: 14 },
+                { s1: 15, s2: 18 },
+              ]}
+              height={110}
+            />
+          </View>
+
+          {/* Things to Improve */}
+          <Text
+            style={[
+              glowText,
+              {
+                color: '#FFF',
+                fontWeight: '900',
+                fontSize: 22,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+                marginBottom: 14,
+              },
+            ]}
+          >
+            Things to Improve:
+          </Text>
+          {improvements.map(item => (
+            <View key={item} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={[glowText, { color: '#FFF', fontSize: 18, fontWeight: '900', marginRight: 10 }]}>
+                •
+              </Text>
+              <Text
+                style={[
+                  glowText,
+                  {
+                    color: '#FFF',
+                    fontWeight: '800',
+                    fontSize: 20,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1,
+                  },
+                ]}
+              >
+                {item}
+              </Text>
+            </View>
+          ))}
+
+          {/* Action Buttons */}
+          <View style={{ marginTop: 32, gap: 16 }}>
+            <MagentaButton
+              title="Review Video Footage"
+              onPress={() => Alert.alert('Review', 'Open video playback')}
+            />
+            <CyanButton
+              title="Try Again"
+              onPress={() => navigation.goBack()}
+            />
+          </View>
+        </ScrollView>
+
+        <BottomNav activeIndex={1} />
+      </View>
+    </SafeAreaView>
+  );
+}
