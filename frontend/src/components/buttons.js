@@ -14,7 +14,7 @@ const labelStyle = {
   fontSize: 18,
 };
 
-export const CyanButton = ({ title, onPress, style = {}, disabled = false }) => (
+export const CyanButton = ({ title, onPress, style = {}, textStyle = {}, disabled = false }) => (
   <TouchableOpacity
     onPress={onPress}
     disabled={disabled}
@@ -36,11 +36,11 @@ export const CyanButton = ({ title, onPress, style = {}, disabled = false }) => 
       style,
     ]}
   >
-    <Text style={{ ...labelStyle, color: '#FFF' }}>{title}</Text>
+    <Text style={{ ...labelStyle, color: '#FFF', ...textStyle }}>{title}</Text>
   </TouchableOpacity>
 );
 
-export const MagentaButton = ({ title, onPress, style = {} }) => (
+export const MagentaButton = ({ title, onPress, style = {}, textStyle = {} }) => (
   <TouchableOpacity
     onPress={onPress}
     activeOpacity={0.8}
@@ -60,7 +60,7 @@ export const MagentaButton = ({ title, onPress, style = {} }) => (
       style,
     ]}
   >
-    <Text style={{ ...labelStyle, color: '#FFF' }}>{title}</Text>
+    <Text style={{ ...labelStyle, color: '#FFF', ...textStyle }}>{title}</Text>
   </TouchableOpacity>
 );
 

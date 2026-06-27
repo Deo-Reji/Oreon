@@ -12,6 +12,7 @@ import { BottomNav } from '../../components/navigation';
 import { CyanButton } from '../../components/buttons';
 import { useTabSwipe } from '../../hooks/useTabSwipe';
 import { CommonActions } from '@react-navigation/native';
+import { useAuth } from '../../state/authContext';
 
 const CYAN = '#00DFFF';
 const MAGENTA = '#CC00FF';
@@ -28,6 +29,7 @@ const PLACEHOLDER_BODY =
 export default function AccountSettings({ navigation }) {
   const [activeTab, setActiveTab] = useState('account');
   const panHandlers = useTabSwipe(2, navigation);
+  const { signOut } = useAuth();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
@@ -106,11 +108,12 @@ export default function AccountSettings({ navigation }) {
         <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
           <CyanButton
             title="Log Out"
-            onPress={() =>
+            onPress={async () => {
+              await signOut();
               navigation.dispatch(
                 CommonActions.reset({ index: 0, routes: [{ name: 'OnboardingSplash' }] })
-              )
-            }
+              );
+            }}
           />
         </View>
         <BottomNav activeIndex={2} />

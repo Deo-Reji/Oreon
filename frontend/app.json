@@ -3,9 +3,18 @@
     "name": "Oreon",
     "slug": "oreon",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
+    "backgroundColor": "#000000",
     "newArchEnabled": true,
-    "platforms": ["ios", "android"],
-    "assetBundlePatterns": ["**/*"]
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-video"
+    ]
   }
 }

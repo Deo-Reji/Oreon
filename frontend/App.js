@@ -1,5 +1,8 @@
-import { NavigationContainer } from '@react-navigation/native';
+import { useEffect } from 'react';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 import { AuthProvider } from './src/state/authContext';
 import OnboardingSplash from './src/screens/auth/onBoardingSplash';
@@ -18,13 +21,31 @@ import SubscriptionsScreen from './src/screens/profile/subscriptionsScreen';
 
 const Stack = createNativeStackNavigator();
 
+// Black root background so rotation/transitions never flash white.
+const AppTheme = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: '#000' },
+};
+
 export default function App() {
+  // Lock the app to portrait by default; the workout screen unlocks itself
+  // so it can rotate to landscape for wide-angle recording.
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  }, []);
+
   return (
-    <AuthProvider>
-      <NavigationContainer>
+    <SafeAreaProvider>
+      <AuthProvider>
+      <NavigationContainer theme={AppTheme}>
         <Stack.Navigator
           initialRouteName="OnboardingSplash"
-          screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false }}
+          screenOptions={{
+            headerShown: false,
+            animation: 'fade',
+            gestureEnabled: false,
+            contentStyle: { backgroundColor: '#000' },
+          }}
         >
           <Stack.Screen name="OnboardingSplash" component={OnboardingSplash} />
         <Stack.Screen name="SignIn" component={SignIn} />
@@ -41,6 +62,7 @@ export default function App() {
         <Stack.Screen name="SubscriptionsScreen" component={SubscriptionsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
-    </AuthProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

@@ -26,8 +26,9 @@ const IMPROVEMENTS = [
   'Not Enough Depth',
 ];
 
-export default function FormResults({ navigation }) {
-  const score = 87;
+export default function FormResults({ navigation, route }) {
+  const { score: rawScore = 0, reps = 0, exercise = '' } = route?.params ?? {};
+  const score = Math.min(Math.round(rawScore), 100);
   const improvements = IMPROVEMENTS;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
@@ -52,11 +53,19 @@ export default function FormResults({ navigation }) {
                 letterSpacing: 2,
                 textAlign: 'center',
                 lineHeight: 46,
-                marginBottom: 24,
+                marginBottom: 8,
               },
             ]}
           >
             Your Form{'\n'}Results
+          </Text>
+          {exercise ? (
+            <Text style={{ color: '#AAA', fontSize: 14, textAlign: 'center', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+              {exercise}
+            </Text>
+          ) : null}
+          <Text style={[glowText, { color: '#FFF', fontSize: 20, fontWeight: '900', textAlign: 'center', marginBottom: 20 }]}>
+            {reps} {reps === 1 ? 'Rep' : 'Reps'}
           </Text>
 
           {/* Charts row */}

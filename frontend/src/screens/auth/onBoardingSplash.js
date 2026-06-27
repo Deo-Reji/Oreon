@@ -30,7 +30,7 @@ export default function OnboardingSplash({ navigation }) {
         </View>
 
         {/* Heading */}
-        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        <View style={{ alignItems: 'center', marginBottom: 30 }}>
           <Text
             style={[
               glowText,
