@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { CyanButton } from '../../components/buttons';
+import { useAuth } from '../../hooks/useAuth';
 
 const CYAN = '#00DFFF';
 const MAGENTA = '#CC00FF';
@@ -33,6 +34,27 @@ const fieldStyle = {
 };
 
 export default function SignIn({ navigation }) {
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSignIn() {
+    if (!email || !password) {
+      Alert.alert('Missing info', 'Please enter your email and password.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await signIn(email.trim(), password);
+      navigation.reset({ index: 0, routes: [{ name: 'HomeScreen' }] });
+    } catch (err) {
+      Alert.alert('Sign in failed', err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -54,17 +76,25 @@ export default function SignIn({ navigation }) {
             placeholderTextColor="#440066"
             keyboardType="email-address"
             autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
             style={fieldStyle}
           />
           <TextInput
             placeholder="Password"
             placeholderTextColor="#440066"
             secureTextEntry
+            value={password}
+            onChangeText={setPassword}
             style={fieldStyle}
           />
 
           <View style={{ marginTop: 16 }}>
-            <CyanButton title="Sign In" onPress={() => navigation.navigate('HomeScreen')} />
+            <CyanButton
+              title={submitting ? 'Signing In...' : 'Sign In'}
+              onPress={handleSignIn}
+              disabled={submitting}
+            />
           </View>
 
           <TouchableOpacity

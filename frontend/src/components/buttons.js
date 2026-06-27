@@ -14,9 +14,10 @@ const labelStyle = {
   fontSize: 18,
 };
 
-export const CyanButton = ({ title, onPress, style = {} }) => (
+export const CyanButton = ({ title, onPress, style = {}, disabled = false }) => (
   <TouchableOpacity
     onPress={onPress}
+    disabled={disabled}
     activeOpacity={0.8}
     style={[
       {
@@ -30,6 +31,7 @@ export const CyanButton = ({ title, onPress, style = {} }) => (
         shadowOpacity: 0.8,
         shadowRadius: 12,
         elevation: 8,
+        opacity: disabled ? 0.5 : 1,
       },
       style,
     ]}

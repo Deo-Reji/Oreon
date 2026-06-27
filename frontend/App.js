@@ -1,6 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { AuthProvider } from './src/state/authContext';
 import OnboardingSplash from './src/screens/auth/onBoardingSplash';
 import SignIn from './src/screens/auth/signIn';
 import SignUp from './src/screens/auth/signUp';
@@ -19,12 +20,13 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="OnboardingSplash"
-        screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false }}
-      >
-        <Stack.Screen name="OnboardingSplash" component={OnboardingSplash} />
+    <AuthProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName="OnboardingSplash"
+          screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false }}
+        >
+          <Stack.Screen name="OnboardingSplash" component={OnboardingSplash} />
         <Stack.Screen name="SignIn" component={SignIn} />
         <Stack.Screen name="SignUp" component={SignUp} />
         <Stack.Screen name="GettingStarted" component={GettingStarted} />
@@ -37,7 +39,8 @@ export default function App() {
         <Stack.Screen name="LeaderboardScreen" component={LeaderboardScreen} />
         <Stack.Screen name="AccountSettings" component={AccountSettings} />
         <Stack.Screen name="SubscriptionsScreen" component={SubscriptionsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </AuthProvider>
   );
 }
