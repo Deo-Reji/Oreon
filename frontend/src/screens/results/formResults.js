@@ -13,6 +13,7 @@ import { MagentaButton, CyanButton } from '../../components/buttons';
 import { DonutChart, SimpleBarChart } from '../../components/charts';
 
 const MAGENTA = '#CC00FF';
+const CYAN = '#00DFFF';
 
 const glowText = {
   textShadowColor: '#FFFFFF',
@@ -20,16 +21,15 @@ const glowText = {
   textShadowRadius: 18,
 };
 
-const IMPROVEMENTS = [
-  'Too Narrow Grip',
-  'Elbows Flared',
-  'Not Enough Depth',
-];
-
 export default function FormResults({ navigation, route }) {
-  const { score: rawScore = 0, reps = 0, exercise = '' } = route?.params ?? {};
+  const {
+    score: rawScore = 0,
+    reps = 0,
+    exercise = '',
+    grade = '',
+    improvements = [],
+  } = route?.params ?? {};
   const score = Math.min(Math.round(rawScore), 100);
-  const improvements = IMPROVEMENTS;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -64,9 +64,14 @@ export default function FormResults({ navigation, route }) {
               {exercise}
             </Text>
           ) : null}
-          <Text style={[glowText, { color: '#FFF', fontSize: 20, fontWeight: '900', textAlign: 'center', marginBottom: 20 }]}>
+          <Text style={[glowText, { color: '#FFF', fontSize: 20, fontWeight: '900', textAlign: 'center', marginBottom: grade ? 6 : 20 }]}>
             {reps} {reps === 1 ? 'Rep' : 'Reps'}
           </Text>
+          {grade ? (
+            <Text style={[glowText, { color: CYAN, fontSize: 26, fontWeight: '900', textAlign: 'center', marginBottom: 20, letterSpacing: 1 }]}>
+              Grade: {grade}
+            </Text>
+          ) : null}
 
           {/* Charts row */}
           <View
@@ -104,27 +109,38 @@ export default function FormResults({ navigation, route }) {
           >
             Things to Improve:
           </Text>
-          {improvements.map(item => (
-            <View key={item} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={[glowText, { color: '#FFF', fontSize: 18, fontWeight: '900', marginRight: 10 }]}>
-                •
-              </Text>
-              <Text
-                style={[
-                  glowText,
-                  {
-                    color: '#FFF',
-                    fontWeight: '800',
-                    fontSize: 20,
-                    textTransform: 'uppercase',
-                    letterSpacing: 1,
-                  },
-                ]}
-              >
-                {item}
-              </Text>
-            </View>
-          ))}
+          {improvements.length === 0 ? (
+            <Text
+              style={[
+                glowText,
+                { color: '#FFF', fontWeight: '800', fontSize: 18, letterSpacing: 1 },
+              ]}
+            >
+              Clean reps — no major faults detected.
+            </Text>
+          ) : (
+            improvements.map(item => (
+              <View key={item} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={[glowText, { color: '#FFF', fontSize: 18, fontWeight: '900', marginRight: 10 }]}>
+                  •
+                </Text>
+                <Text
+                  style={[
+                    glowText,
+                    {
+                      color: '#FFF',
+                      fontWeight: '800',
+                      fontSize: 20,
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                    },
+                  ]}
+                >
+                  {item}
+                </Text>
+              </View>
+            ))
+          )}
 
           {/* Action Buttons */}
           <View style={{ marginTop: 32, gap: 16 }}>

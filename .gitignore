@@ -48,6 +48,10 @@ env/
 *.onnx
 *.h5
 *.pkl
+*.task
+
+# Captured landmark training data (local; back up separately if keeping)
+backend/data/
 
 # OS
 .DS_Store

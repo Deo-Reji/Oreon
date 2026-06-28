@@ -1,0 +1,61 @@
+"""Dump per-rep analysis numbers from saved landmark clips, for tuning thresholds.
+
+Usage (from backend/, with the venv active):
+    python inspect_landmarks.py            # all saved sessions
+    python inspect_landmarks.py 12         # just session 12
+
+For each clip it prints the rep count and, per rep, the key angles the fault
+rules depend on (depth_angle, top_angle, rom) plus detected faults. Compare the
+numbers on a clip you KNOW was good vs one you KNOW was faulty to see where each
+threshold in exercises.py should sit.
+"""
+import os
+import sys
+import glob
+import numpy as np
+
+from app.services.exercises import analyze_exercise
+
+LANDMARK_DIR = os.path.join(os.path.dirname(__file__), "data", "landmarks")
+
+
+def inspect(path: str):
+    data = np.load(path, allow_pickle=True)
+    exercise = str(data["exercise"])
+    landmarks = data["landmarks"]
+    timestamps = data["timestamps"]
+
+    result = analyze_exercise(exercise, landmarks, timestamps)
+
+    name = os.path.basename(path)
+    print(f"\n=== {name}  |  exercise='{exercise}'  |  frames={landmarks.shape[0]}")
+    print(f"    reps={result['reps']}  form_score={result['form_score']}  grade={result['grade']}")
+    if result["improvements"]:
+        print(f"    improvements: {result['improvements']}")
+    for r in result["rep_details"]:
+        print(
+            f"    rep {r['rep']:>2}: depth={r['depth_angle']:>6.1f}  "
+            f"top={r['top_angle']:>6.1f}  rom={r['rom']:>6.1f}  "
+            f"dur={r['duration_s']:>4.1f}s  score={r['score']:>3}  faults={r['faults']}"
+        )
+
+
+def main():
+    if len(sys.argv) > 1:
+        paths = [os.path.join(LANDMARK_DIR, f"{sys.argv[1]}.npz")]
+    else:
+        paths = sorted(glob.glob(os.path.join(LANDMARK_DIR, "*.npz")))
+
+    if not paths:
+        print(f"No landmark files found in {LANDMARK_DIR}")
+        return
+
+    for p in paths:
+        if os.path.exists(p):
+            inspect(p)
+        else:
+            print(f"Not found: {p}")
+
+
+if __name__ == "__main__":
+    main()

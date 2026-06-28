@@ -202,6 +202,9 @@ export default function WorkoutSession({ navigation, route }) {
         score: data.form_score,
         reps: data.reps,
         exercise: exerciseName,
+        grade: data.grade,
+        improvements: data.improvements,
+        repDetails: data.rep_details,
       });
     } catch (err) {
       Alert.alert('Analysis failed', err.message ?? 'Something went wrong. Try again.');
