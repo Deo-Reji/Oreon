@@ -32,11 +32,18 @@ def inspect(path: str):
     print(f"    reps={result['reps']}  form_score={result['form_score']}  grade={result['grade']}")
     if result["improvements"]:
         print(f"    improvements: {result['improvements']}")
+    sc = result.get("self_calibration") or {}
+    if sc:
+        print(f"    self-cal: capacity={sc['capacity']}  capacity_depth={sc['capacity_depth']}  "
+              f"cut_short={sc['cut_short_reps']}")
+        print(f"              {sc['verdict']}")
     for r in result["rep_details"]:
+        mark = " <cut-short>" if r.get("short_vs_best") else ""
         print(
             f"    rep {r['rep']:>2}: depth={r['depth_angle']:>6.1f}  "
             f"top={r['top_angle']:>6.1f}  rom={r['rom']:>6.1f}  "
-            f"dur={r['duration_s']:>4.1f}s  score={r['score']:>3}  faults={r['faults']}"
+            f"lean={r['lean']:>5.1f}  drift={r['drift']:>5.3f}  "
+            f"dur={r['duration_s']:>4.1f}s  score={r['score']:>3}  faults={r['faults']}{mark}"
         )
 
 
