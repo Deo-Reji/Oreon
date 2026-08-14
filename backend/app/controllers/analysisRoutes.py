@@ -25,8 +25,8 @@ async def analyze(
     seq = extract_pose_sequence(video_bytes)
     result = analyze_exercise(exercise, seq["landmarks"], seq["timestamps"])
 
-    # This writes the high-level summaries (rep count + form score) to the DB.
-    # Raw per-rep breakdowns are kept in `result` and returned to the client but not stored.
+    # This writes the high-level summary (rep count + form score) to the DB; the
+    # per-rep breakdown is written below as RepDetail rows.
     session = models.WorkoutSession(
         user_id=current_user.id,
         exercise_type=exercise,
@@ -43,7 +43,28 @@ async def analyze(
     # Save the raw landmark time series (not the video) to disk as a compressed .npz;
     storage.save_landmarks(session.id, seq, exercise, current_user.id)
 
-    # Commit only after the landmark file is safely written — both succeed or neither does.
+    # Persist the per-rep breakdown too (previously returned to the client only
+    # and discarded server-side) -- this is what makes real user sessions usable
+    # as training data later, same as the research .npz clips are now.
+    for r in result["rep_details"]:
+        db.add(models.RepDetail(
+            session_id=session.id,
+            rep_num=r["rep"],
+            depth_angle=r.get("depth_angle"),
+            top_angle=r.get("top_angle"),
+            rom=r.get("rom"),
+            lean=r.get("lean"),
+            drift=r.get("drift"),
+            symmetry=r.get("symmetry"),
+            flare=r.get("flare"),
+            duration_s=r.get("duration_s"),
+            faults=";".join(r.get("faults", [])),
+            score=r.get("score"),
+            short_vs_best=r.get("short_vs_best", False),
+        ))
+
+    # Commit only after the landmark file + rep rows are safely written — everything
+    # succeeds together or nothing does.
     db.commit()
 
     return {
