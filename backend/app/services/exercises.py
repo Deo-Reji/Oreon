@@ -51,6 +51,9 @@ def _torso_length(landmarks: np.ndarray) -> float:
     return float(np.clip(np.median(np.linalg.norm(sh - hp, axis=1)), 1e-3, None))
 
 
+MIN_VIS = 0.5   # landmarks below this visibility are occluded/guessed -> ignore them
+
+
 # --- Behind-view bench helpers -------------------------------------------------
 # Bench is filmed from behind the head (both arms visible, no body occlusion).
 # From that angle the elbow ANGLE is foreshortened and useless, so bench is driven
@@ -69,6 +72,37 @@ def _shoulder_width(landmarks: np.ndarray) -> float:
     return float(np.clip(np.median(w), 1e-3, None))
 
 
+BAR_MAX_GAP = 3   # bridge occlusions up to this many consecutive frames, no longer
+
+
+def _interp_short_gaps(series: np.ndarray, bad: np.ndarray, max_gap: int) -> np.ndarray:
+    """Linearly bridge runs of `bad` frames that are at most `max_gap` long.
+
+    Deliberately does NOT bridge longer runs. A short run is a tracking glitch and
+    interpolating it repairs the signal; a long run is genuine occlusion, and
+    drawing a straight line across it would ERASE real movement — on a bench press
+    the wrists are most occluded exactly at the bottom of the rep, so unbounded
+    interpolation quietly flattens away the chest touch (and with it, the depth
+    reading and sometimes the rep itself). Long gaps are left raw so they stay
+    visible to the caller / diagnostics instead of being silently invented.
+    """
+    if not bad.any() or bad.all():
+        return series
+    out = series.copy()
+    idx = np.arange(series.shape[0])
+    good = ~bad
+    # Walk each maximal run of consecutive bad frames; bridge only the short ones.
+    starts = np.flatnonzero(bad & ~np.r_[False, bad[:-1]])
+    for start in starts:
+        end = start
+        while end + 1 < bad.shape[0] and bad[end + 1]:
+            end += 1
+        if (end - start + 1) <= max_gap and start > 0 and end < bad.shape[0] - 1:
+            span = idx[start:end + 1]
+            out[start:end + 1] = np.interp(span, idx[good], series[good])
+    return out
+
+
 def _bar_height_series(landmarks: np.ndarray, scale: float) -> np.ndarray:
     """Bar (wrist-midpoint) height above the shoulder line, in shoulder-widths.
 
@@ -76,14 +110,20 @@ def _bar_height_series(landmarks: np.ndarray, scale: float) -> np.ndarray:
     are above the shoulders. ~0 at the chest, large when pressed out to lockout.
     Referencing to the shoulder line makes it invariant to where the body sits in
     the frame; dividing by shoulder width makes it invariant to camera distance.
+
+    This is the PRIMARY signal (it drives rep segmentation, depth and lockout), so
+    short tracking dropouts are bridged rather than left to corrupt it. The
+    symmetry/flare series NaN-mask their bad frames instead, which they can afford
+    to do because they're aggregated with a percentile; this one can't, because a
+    hole in it changes where the rep boundaries land.
     """
     xy = landmarks[:, :, :2]
+    vis = landmarks[:, :, 3]
     wrist_y = (xy[:, pp.L_WRIST, 1] + xy[:, pp.R_WRIST, 1]) / 2.0
     shoulder_y = (xy[:, pp.L_SHOULDER, 1] + xy[:, pp.R_SHOULDER, 1]) / 2.0
-    return ((shoulder_y - wrist_y) / scale).astype(np.float32)
-
-
-MIN_VIS = 0.5   # landmarks below this visibility are occluded/guessed -> ignore them
+    bar = (shoulder_y - wrist_y) / scale
+    bad = (vis[:, pp.L_WRIST] < MIN_VIS) | (vis[:, pp.R_WRIST] < MIN_VIS)
+    return _interp_short_gaps(bar, bad, BAR_MAX_GAP).astype(np.float32)
 
 
 def _wrist_symmetry_series(landmarks: np.ndarray, scale: float) -> np.ndarray:
@@ -157,7 +197,8 @@ def _clean_signal(angle: np.ndarray) -> np.ndarray:
     return _smooth(_median_filter(angle))
 
 
-def _segment_reps(angle: np.ndarray, min_range: float = 25.0, margin_frac: float = 0.15):
+def _segment_reps(angle: np.ndarray, min_range: float = 25.0, margin_frac: float = 0.15,
+                  lo: float = None, hi: float = None):
     """Adaptive rep segmentation: count an oscillation relative to THIS clip's
     own range, so partial/short reps still register (a fixed high/low threshold
     misses them entirely). A rep = cross above the upper band, dip below the
@@ -168,14 +209,21 @@ def _segment_reps(angle: np.ndarray, min_range: float = 25.0, margin_frac: float
     reps but risks double-counting jitter. Bench uses a tighter band than the
     squat/curl default because its wrist-height swing is smaller.
 
+    lo/hi override the reference range when the caller can estimate it better than
+    whole-clip percentiles can. Bench needs this: its un-rack sits far below the
+    pressing range and drags the percentiles down (see _bench_working_range).
+    Squat/curl pass neither and keep the original whole-clip behaviour.
+
     Returns (start, bottom, end) frame indices per rep.
     """
     n = angle.shape[0]
     if n < 5:
         return []
 
-    lo = float(np.percentile(angle, 5))   # robust "bottom" reference
-    hi = float(np.percentile(angle, 95))  # robust "top" reference
+    if lo is None:
+        lo = float(np.percentile(angle, 5))   # robust "bottom" reference
+    if hi is None:
+        hi = float(np.percentile(angle, 95))  # robust "top" reference
     rng = hi - lo
     if rng < min_range:                   # barely any movement -> no reps
         return []
@@ -275,6 +323,36 @@ BENCH_LOCKOUT_MIN = 1.2     # top bar height below this -> didn't fully lock out
 BENCH_CHEST_MAX = 0.55      # bottom bar height above this -> bar didn't reach chest
 BENCH_SYMMETRY_MAX = 0.40   # L/R wrist-height gap above this -> uneven press
 BENCH_FLARE_MAX = 1.30      # elbow lateral spread above this -> flared elbows
+
+
+def _bench_working_range(bar: np.ndarray):
+    """Estimate the PRESSING range of a bench clip, ignoring the un-rack and re-rack.
+
+    Why this is needed: a bench clip starts with the bar on the rack and the wrists
+    below the shoulder line (bar height strongly negative), then the lifter presses
+    within a much narrower band well above that. Whole-clip percentiles therefore
+    put the p5 reference down in the SETUP, which drags the hysteresis bands below
+    where the reps actually oscillate — the state machine never sees a dip below the
+    lower band and returns 0 reps even on a clean signal (measured on clip 64: reps
+    oscillate 0.51-0.69 while the lower band sat at 0.02).
+
+    The bar is "up" for the whole working set, so the span between the first and last
+    frame above the clip median brackets the press and excludes both racks. The
+    squat/curl path deliberately does NOT use this — their walk-out is inside the
+    same range as the reps, so whole-clip percentiles are already correct there.
+
+    Returns (lo, hi), or (None, None) when the clip is too short/flat to judge, which
+    makes _segment_reps fall back to its normal whole-clip behaviour.
+    """
+    if bar.shape[0] < 5:
+        return None, None
+    up = np.flatnonzero(bar > float(np.median(bar)))
+    if up.size < 2:
+        return None, None
+    work = bar[up[0]:up[-1] + 1]
+    if work.shape[0] < 5:
+        return None, None
+    return float(np.percentile(work, 5)), float(np.percentile(work, 95))
 
 
 def _bench_faults(m):
@@ -526,7 +604,10 @@ def _analyze_bench(landmarks: np.ndarray, timestamps: np.ndarray) -> dict:
     sym = _wrist_symmetry_series(landmarks, scale)
     flare = _elbow_flare_series(landmarks, scale)
 
-    segments = _segment_reps(bar, min_range=BENCH_MIN_RANGE, margin_frac=0.10)
+    # Bands come from the pressing region only, so the un-rack can't drag them down.
+    work_lo, work_hi = _bench_working_range(bar)
+    segments = _segment_reps(bar, min_range=BENCH_MIN_RANGE, margin_frac=0.10,
+                             lo=work_lo, hi=work_hi)
     bottoms = [b for (_, b, _) in segments]
     n_frames = bar.shape[0]
 
