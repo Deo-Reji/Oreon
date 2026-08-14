@@ -12,17 +12,21 @@ router = APIRouter()
 
 @router.post("/analyze")
 async def analyze(
-    video: UploadFile = File(...),
-    exercise: str = Form(default="squat"),
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    video: UploadFile = File(...),                              
+    exercise: str = Form(default="squat"),                      
+    current_user: models.User = Depends(get_current_user),     
+    db: Session = Depends(get_db),                             
 ):
+    #This loads the full video into memory as bytes
     video_bytes = await video.read()
 
-    # video -> normalized, rep-segmented landmark sequence -> per-rep analysis
+    # We run the MediaPipe pose estimation frame-by-frame to build a (T, 33, 4) landmark array,
+    # then segment that signal into reps and score each one with rule-based fault detection.
     seq = extract_pose_sequence(video_bytes)
     result = analyze_exercise(exercise, seq["landmarks"], seq["timestamps"])
 
+    # This writes the high-level summaries (rep count + form score) to the DB.
+    # Raw per-rep breakdowns are kept in `result` and returned to the client but not stored.
     session = models.WorkoutSession(
         user_id=current_user.id,
         exercise_type=exercise,
@@ -30,11 +34,17 @@ async def analyze(
         form_score=result["form_score"],
     )
     db.add(session)
-    db.commit()
+
+    # flush assigns session.id (DB PK) without committing the transaction, so if
+    # save_landmarks raises below the whole thing rolls back on session close.
+    db.flush()
     db.refresh(session)
 
-    # Persist the landmark sequence as training data (keyed by session id).
+    # Save the raw landmark time series (not the video) to disk as a compressed .npz;
     storage.save_landmarks(session.id, seq, exercise, current_user.id)
+
+    # Commit only after the landmark file is safely written — both succeed or neither does.
+    db.commit()
 
     return {
         "status": "success",
@@ -44,4 +54,5 @@ async def analyze(
         "grade": result["grade"],
         "improvements": result["improvements"],
         "rep_details": result["rep_details"],
+        "self_calibration": result["self_calibration"],
     }

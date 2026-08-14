@@ -23,8 +23,8 @@ def get_sessions(
 ):
     sessions = (
         db.query(models.WorkoutSession)
-        .filter(models.WorkoutSession.user_id == current_user.id)
-        .order_by(models.WorkoutSession.created_at.desc())
+        .filter(models.WorkoutSession.user_id == current_user.id)  
+        .order_by(models.WorkoutSession.created_at.desc())         
         .all()
     )
     return [

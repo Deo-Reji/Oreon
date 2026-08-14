@@ -8,8 +8,9 @@ from app.services.authService import hash_password, verify_password, create_acce
 router = APIRouter()
 
 
+
 class RegisterRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr  
     password: str
 
 
@@ -20,18 +21,18 @@ class LoginRequest(BaseModel):
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(models.User).filter(models.User.email == body.email).first():
+    if db.query(models.User).filter(models.User.email == body.email).first(): 
         raise HTTPException(status_code=400, detail="Email already registered")
-    user = models.User(email=body.email, password_hash=hash_password(body.password))
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return {"token": create_access_token(user.id)}
+    user = models.User(email=body.email, password_hash=hash_password(body.password))  
+    db.add(user)     
+    db.commit()      
+    db.refresh(user) 
+    return {"token": create_access_token(user.id)}  
 
 
 @router.post("/login")
 def login(body: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == body.email).first()
-    if not user or not verify_password(body.password, user.password_hash):
+    user = db.query(models.User).filter(models.User.email == body.email).first()  
+    if not user or not verify_password(body.password, user.password_hash):  
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"token": create_access_token(user.id)}
+    return {"token": create_access_token(user.id)} 
