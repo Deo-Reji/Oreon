@@ -1,7 +1,15 @@
 import os
 import bcrypt
 from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
 from jose import jwt
+
+# Load .env here too, not just in database.py. SECRET_KEY is read at import time,
+# so without this the module only works when something else (database.py) happened
+# to be imported first — any script that reaches auth directly would die with a
+# misleading "SECRET_KEY not set" despite .env being correct. load_dotenv() is
+# idempotent and won't override variables already set in the environment.
+load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:

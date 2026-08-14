@@ -102,9 +102,15 @@ def extract_pose_sequence(video_bytes: bytes, sample_every: int = 2) -> dict:
         cap = cv2.VideoCapture(tmp_path)
 
         # Read native frame rate from the video header.
-        # Falls back to 30fps if the header is missing or reports 0
-        # (some phone recordings omit or zero the fps metadata field).
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        # Falls back to 30fps if the header is missing, zero, NaN or negative
+        # (some phone recordings omit or corrupt the fps metadata field). The
+        # non-finite cases matter: `nan or 30` keeps the nan (nan is truthy),
+        # and the timestamp below would then raise on int(nan), while a negative
+        # fps makes timestamps run BACKWARDS and detect_for_video rejects them —
+        # either way the request would 500 instead of returning a result.
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if not fps or not np.isfinite(fps) or fps <= 0:
+            fps = 30.0
 
         # Counts every frame — including ones we skip — so that t = frame_idx / fps
         # stays accurate even when sample_every > 1.
