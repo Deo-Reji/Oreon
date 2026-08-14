@@ -3,9 +3,16 @@ uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt
 python-multipart
 mediapipe
 opencv-python
+numpy
 python-dotenv
 email-validator
+
+# Stage-2 ML: feature table + RandomForest harness (build_feature_table.py --smoke)
+scikit-learn
+
+# Tests: python -m pytest tests/
+pytest
