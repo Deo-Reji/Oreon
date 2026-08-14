@@ -39,12 +39,41 @@ def load_manifest() -> list:
         return list(csv.DictReader(f))
 
 
-def build_rows(manifest: list) -> list:
+def build_rows(manifest: list) -> tuple:
+    """Returns (rows, skipped, missing).
+
+    skipped = bench sessions, excluded on purpose: bench is parked/uncalibrated AND
+    its rep_details carry a different schema (symmetry/flare instead of lean/drift),
+    so folding it in would mean half-empty columns and rows the ML shouldn't train on.
+
+    missing = manifest rows whose .npz is gone. This is reachable, not paranoia:
+    tag_session.py deliberately lets you tag a session before/without its landmark
+    file, and cleanup_session.py deletes .npz files without touching subjects.csv.
+    Reported rather than raised, so one stale row can't block the whole table.
+
+    mismatched = sessions where the .npz's exercise disagrees with subjects.csv.
+    The analyzer follows the .npz (that's what was actually filmed) while the table
+    records the CSV's exercise, so a disagreement would silently mislabel real
+    features -- the same class of fault as the mis-tagged session 90-93 batch.
+    """
     rows = []
+    skipped = []
+    missing = []
+    mismatched = []
     for s in manifest:
         path = os.path.join(LANDMARK_DIR, f"{s['session_id']}.npz")
+        if not os.path.exists(path):
+            missing.append(s["session_id"])
+            continue
         data = np.load(path, allow_pickle=True)
-        result = analyze_exercise(str(data["exercise"]), data["landmarks"], data["timestamps"])
+        exercise = str(data["exercise"])
+        if exercise.strip().lower() != s["exercise"].strip().lower():
+            mismatched.append((s["session_id"], exercise, s["exercise"]))
+            continue
+        if "bench" in exercise.lower():
+            skipped.append(s["session_id"])
+            continue
+        result = analyze_exercise(exercise, data["landmarks"], data["timestamps"])
         for r in result["rep_details"]:
             rows.append({
                 "session_id": s["session_id"],
@@ -65,7 +94,7 @@ def build_rows(manifest: list) -> list:
                 "rule_score": r["score"],
                 "short_vs_best": r.get("short_vs_best", False),
             })
-    return rows
+    return rows, skipped, missing, mismatched
 
 
 def write_features(rows: list):
@@ -75,15 +104,61 @@ def write_features(rows: list):
         w.writerows(rows)
 
 
-def sanity_report(manifest: list, rows: list):
-    print(f"\n=== Feature table: {len(rows)} reps from {len(manifest)} sessions -> {FEATURES_CSV}")
+def find_disagreements(manifest: list, rows: list) -> list:
+    """Cross-check the two label sources. A 'good' session where the rule engine
+    flags reps is a possible false positive (regression in the thresholds); a
+    fault-labeled session where NO rep gets flagged is a miss. Both are known to
+    exist today (under-exaggerated demos) -- see test_engine_regression.py, which
+    pins the current set so a NEW one shows up as a test failure, not a surprise.
+
+    Returns a list of {session_id, person, exercise, label, kind, detail} dicts,
+    one per disagreeing session (kind is "false_positive" or "missed_fault").
+    """
+    by_session = {}
+    for r in rows:
+        by_session.setdefault(r["session_id"], []).append(r)
+
+    disagreements = []
+    for s in manifest:
+        sid = s["session_id"]
+        reps = by_session.get(sid, [])
+        flagged = [r for r in reps if r["rule_faults"]]
+        if s["label"] == "good" and flagged:
+            faults = Counter(f for r in flagged for f in r["rule_faults"].split(";"))
+            disagreements.append({
+                "session_id": sid, "person": s["person"], "exercise": s["exercise"],
+                "label": s["label"], "kind": "false_positive",
+                "detail": f"{len(flagged)}/{len(reps)} reps flagged {dict(faults)}",
+            })
+        elif s["label"] != "good" and reps and not flagged:
+            disagreements.append({
+                "session_id": sid, "person": s["person"], "exercise": s["exercise"],
+                "label": s["label"], "kind": "missed_fault",
+                "detail": f"0/{len(reps)} reps flagged",
+            })
+    return disagreements
+
+
+def sanity_report(manifest: list, rows: list, skipped: list = (), missing: list = (),
+                  mismatched: list = ()):
+    analyzed_ids = {r["session_id"] for r in rows}
+    print(f"\n=== Feature table: {len(rows)} reps from {len(analyzed_ids)} sessions -> {FEATURES_CSV}")
+    if skipped:
+        print(f"    skipped {len(skipped)} bench session(s) (parked, different schema): {skipped}")
+    if missing:
+        print(f"    !! {len(missing)} tagged session(s) have no .npz file: {missing}")
+    for sid, npz_ex, csv_ex in mismatched:
+        print(f"    !! session {sid} EXERCISE MISMATCH: .npz says '{npz_ex}', "
+              f"subjects.csv says '{csv_ex}' -- excluded; re-tag before trusting it")
 
     by_person = Counter()
     by_exercise = Counter()
     by_label = Counter()
+    # Count only sessions that actually produced rows, so session and rep counts agree.
     sessions_per_person = Counter()
     for s in manifest:
-        sessions_per_person[s["person"]] += 1
+        if s["session_id"] in analyzed_ids:
+            sessions_per_person[s["person"]] += 1
     for r in rows:
         by_person[r["person"]] += 1
         by_exercise[r["exercise"]] += 1
@@ -99,34 +174,23 @@ def sanity_report(manifest: list, rows: list):
     for label, n in by_label.most_common():
         print(f"      {label:<18} {n:>3}")
 
+    mismatched_ids = {sid for sid, _, _ in mismatched}
     zero_rep = [s["session_id"] for s in manifest
-                if not any(r["session_id"] == s["session_id"] for r in rows)]
+                if s["session_id"] not in analyzed_ids
+                and s["session_id"] not in skipped
+                and s["session_id"] not in missing
+                and s["session_id"] not in mismatched_ids]
     if zero_rep:
         print(f"\n    !! sessions with ZERO reps segmented: {zero_rep}")
 
-    # Cross-check the two label sources. A 'good' session where the rule engine
-    # flags reps is a possible false positive (regression in the thresholds); a
-    # fault-labeled session where NO rep gets flagged is a miss. Both are known
-    # to exist (under-exaggerated demos) — this report just keeps them visible.
     print("\n    label vs rule-engine disagreements:")
-    disagreements = 0
-    by_session = {}
-    for r in rows:
-        by_session.setdefault(r["session_id"], []).append(r)
-    for s in manifest:
-        reps = by_session.get(s["session_id"], [])
-        flagged = [r for r in reps if r["rule_faults"]]
-        if s["label"] == "good" and flagged:
-            faults = Counter(f for r in flagged for f in r["rule_faults"].split(";"))
-            print(f"      session {s['session_id']} ({s['person']}, {s['exercise']}, GOOD): "
-                  f"{len(flagged)}/{len(reps)} reps flagged {dict(faults)}  <- possible false positive")
-            disagreements += 1
-        elif s["label"] != "good" and reps and not flagged:
-            print(f"      session {s['session_id']} ({s['person']}, {s['exercise']}, "
-                  f"{s['label']}): 0/{len(reps)} reps flagged  <- fault missed")
-            disagreements += 1
+    disagreements = find_disagreements(manifest, rows)
     if not disagreements:
         print("      none")
+    for d in disagreements:
+        tag = "possible false positive" if d["kind"] == "false_positive" else "fault missed"
+        print(f"      session {d['session_id']} ({d['person']}, {d['exercise']}, "
+              f"{d['label']}): {d['detail']}  <- {tag}")
 
 
 def smoke_test(rows: list):
@@ -158,9 +222,9 @@ def smoke_test(rows: list):
 
 def main():
     manifest = load_manifest()
-    rows = build_rows(manifest)
+    rows, skipped, missing, mismatched = build_rows(manifest)
     write_features(rows)
-    sanity_report(manifest, rows)
+    sanity_report(manifest, rows, skipped, missing, mismatched)
     if "--smoke" in sys.argv:
         smoke_test(rows)
 
